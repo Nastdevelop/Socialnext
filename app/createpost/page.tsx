@@ -53,10 +53,13 @@ export default function CreatePost() {
     setLoading(true)
 
     try {
-      let dokumentasi = existingImage || ""
+      let dokumentasi: string | null = existingImage || null
       if (file) {
         const fd = new FormData(); fd.append("file", file)
-        const up = await (await fetch("/api/upload", { method: "POST", body: fd })).json()
+        const res = await fetch("/api/upload", { method: "POST", body: fd })
+        if (!res.ok) throw new Error("Gagal mengupload gambar")
+        const up = await res.json()
+        if (!up.secure_url) throw new Error("Upload gambar tidak menghasilkan URL")
         dokumentasi = up.secure_url
       }
 
@@ -73,7 +76,7 @@ export default function CreatePost() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ content, dokumentasi })
         })
-        if (!res.ok) throw new Error()
+        if (!res.ok) throw new Error("Gagal membuat postingan")
       }
       navigate("/")
     } catch (e: any) { setError(e.message || "Gagal membuat postingan") }

@@ -11,6 +11,7 @@ type Props = { initialMessages: Message[]; userId: number; friendId: number; fri
 export default function ChatBox({ initialMessages, userId, friendId, friendName }: Props) {
   const [messages, setMessages] = useState(initialMessages)
   const [text, setText] = useState("")
+  const [sending, setSending] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement | null>(null)
   const { navigate } = useNav()
 
@@ -25,12 +26,17 @@ export default function ChatBox({ initialMessages, userId, friendId, friendName 
   }, [userId, friendId])
 
   const sendMessage = async () => {
-    if (!text.trim()) return
-    await fetch("/api/message", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ senderId: userId, receiverId: friendId, content: text })
-    })
-    setText("")
+    if (!text.trim() || sending) return
+    setSending(true)
+    try {
+      await fetch("/api/message", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ senderId: userId, receiverId: friendId, content: text })
+      })
+      setText("")
+    } finally {
+      setSending(false)
+    }
   }
 
   return (
@@ -73,9 +79,9 @@ export default function ChatBox({ initialMessages, userId, friendId, friendName 
 
           <div className="p-4 border-t border-slate-100 dark:border-slate-700/60 bg-white dark:bg-slate-800/80">
             <div className="flex gap-2 items-center bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20 rounded-xl p-1.5 transition-all">
-              <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") sendMessage() }}
+              <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !sending) sendMessage() }}
                 className="w-full bg-transparent px-3 py-2 text-sm text-slate-700 dark:text-slate-300 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none" placeholder="Tulis pesan..." />
-              <button onClick={sendMessage} disabled={!text.trim()}
+              <button onClick={sendMessage} disabled={!text.trim() || sending}
                 className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-sm px-5 py-2 rounded-lg flex items-center gap-1.5 transition disabled:opacity-50 shadow-sm">
                 <Send className="w-4 h-4" /> Kirim
               </button>
