@@ -1,65 +1,69 @@
-import Image from "next/image";
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
+import prisma from "@/lib/prisma"
+import PostFeed from "@/component/PostFeed"
+import { Sparkles } from "lucide-react"
 
-export default function Home() {
+export const dynamic = "force-dynamic"
+
+export default async function Home() {
+  const session = await getServerSession(authOptions)
+  const userId = Number(session?.user?.id)
+
+  const posts = await prisma.post.findMany({
+    take: 11,
+    orderBy: { id: "desc" },
+    include: {
+      author: { select: { id: true, username: true, email: true, image: true } },
+      _count: { select: { likes: true, comment: true } },
+    },
+  })
+
+  let nextCursor: number | null = null
+  if (posts.length > 10) {
+    const last = posts.pop()
+    nextCursor = last!.id
+  }
+
+  let likedPostIds: number[] = []
+  let savedPostIds: number[] = []
+
+  if (userId && posts.length > 0) {
+    const [likes, saves] = await Promise.all([
+      prisma.like.findMany({
+        where: { userId, postId: { in: posts.map((p) => p.id) } },
+        select: { postId: true }
+      }),
+      prisma.savedPost.findMany({
+        where: { userId, postId: { in: posts.map((p) => p.id) } },
+        select: { postId: true }
+      })
+    ])
+    likedPostIds = likes.map((l) => l.postId)
+    savedPostIds = saves.map((s) => s.postId)
+  }
+
+  const initialPosts = posts.map((p) => ({
+    ...p,
+    createdAt: p.createdAt.toISOString(),
+    liked: likedPostIds.includes(p.id),
+    saved: savedPostIds.includes(p.id),
+  }))
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="min-h-screen pt-16 pb-8">
+      <div className="max-w-[580px] mx-auto px-4 pt-6 pb-2">
+        <div className="flex items-center gap-2.5 mb-2">
+          <div className="p-2 bg-indigo-50 dark:bg-indigo-500/10 rounded-xl">
+            <Sparkles className="w-5 h-5 text-indigo-500" />
+          </div>
+          <div>
+            <h1 className="text-lg font-bold text-slate-800 dark:text-slate-100">Beranda</h1>
+            <p className="text-xs text-slate-400 dark:text-slate-500">Lihat postingan terbaru dari pengguna</p>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+      </div>
+      <PostFeed initialPosts={initialPosts} initialCursor={nextCursor} userId={userId} />
     </div>
-  );
+  )
 }
